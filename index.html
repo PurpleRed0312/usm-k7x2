@@ -1,0 +1,108 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#12654f"><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon-192.png"><link rel="apple-touch-icon" href="icon-192.png"><title>SplitMate</title>
+<style>
+:root{--bg:#f4f6f3;--card:#fff;--tx:#17251f;--mu:#667871;--pr:#12654f;--on:#fff;--pl:#dcefe8;--bd:#dbe3de;--dg:#b8372a}
+@media(prefers-color-scheme:dark){:root{--bg:#101815;--card:#19231f;--tx:#e8f1ed;--mu:#8da29a;--pr:#4fd1a5;--on:#06271d;--pl:#1b3b31;--bd:#273530;--dg:#ff8071}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+#app{max-width:560px;margin:0 auto;padding:14px 14px 80px}
+h1{font-size:26px;margin:6px 0 14px}h2{font-size:17px;margin:18px 0 8px}small,.mu{color:var(--mu)}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:12px;margin:0 0 10px}
+.row{display:flex;gap:8px;align-items:center}.row>*{min-width:0}.sp{justify-content:space-between}
+input,select{width:100%;font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:10px;padding:13px 12px;min-height:48px}
+input:focus,select:focus,button:focus-visible{outline:2px solid var(--pr);outline-offset:1px}
+label{display:block;font-size:13px;color:var(--mu);margin:8px 0 4px}
+button{font:inherit;cursor:pointer;border:0;border-radius:12px;min-height:48px;padding:0 16px}
+.btn{background:var(--pr);color:var(--on);font-weight:600}.btn2{background:var(--pl);color:var(--tx);font-weight:600;flex:1}
+.big{width:100%;min-height:56px;font-size:18px;margin:4px 0}.ic{background:none;color:var(--mu);min-width:44px;padding:0}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0}
+.chip{display:inline-flex;align-items:center;gap:8px;border:1.5px solid var(--bd);background:var(--card);color:var(--tx);border-radius:999px;min-height:44px;padding:0 14px}
+.chip.on{background:var(--pl);border-color:var(--pr);font-weight:600}.chip i{font-style:normal;color:var(--mu);padding:8px 0 8px 4px}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:var(--bg);padding:4px;border-radius:14px;border:1px solid var(--bd)}
+.seg button{background:none;color:var(--mu)}.seg .on{background:var(--pr);color:var(--on);font-weight:700}
+.g2{display:grid;grid-template-columns:1.3fr 1fr;gap:8px}
+.it{display:flex;align-items:center;gap:6px;padding:10px 0;border-top:1px solid var(--bd)}.it:first-child{border-top:0}
+.it>div:first-child{flex:1;min-width:0}.amt{font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}
+.tag{display:inline-block;font-size:12px;border-radius:6px;padding:1px 7px;background:var(--pl)}
+.tag.i{background:transparent;border:1px solid var(--pr)}
+.hist{display:flex;align-items:center;gap:8px;cursor:pointer}.hist>div:first-child{flex:1;min-width:0}
+.tot{font-size:30px;font-weight:800;font-variant-numeric:tabular-nums}
+.me{display:flex;justify-content:space-between;padding:9px 0;border-top:1px solid var(--bd)}.me:first-of-type{border-top:0}
+.pay{color:var(--pr);font-weight:700}.dg{color:var(--dg)}
+#toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--tx);color:var(--bg);padding:12px 18px;border-radius:12px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:9}
+#toast.s{opacity:1}details{margin-top:8px}summary{cursor:pointer;color:var(--mu);min-height:36px}
+.top{position:sticky;top:0;background:var(--bg);padding:8px 0;z-index:2;display:flex;align-items:center;gap:8px}
+</style></head><body><div id="app"></div><div id="toast"></div>
+<script>
+//<calc>
+function parseDec(s,d){s=String(s).trim().replace(',','.');if(!/^\d*\.?\d*$/.test(s)||s===''||s==='.')return null;let[w,f='']=s.split('.');f=f.padEnd(d+1,'0');return(+w||0)*10**d+ +f.slice(0,d)+(+f[d]>=5?1:0)}
+// price -> integer sen (standard half-up), qty -> thousandths
+const toSen=s=>parseDec(s,2),toMilli=s=>parseDec(s,3);
+const itemTotal=it=>Math.floor((it.price*it.qty+500)/1000);           // sen, half-up
+const share=(t,n)=>Math.floor((2*t+n)/(2*n));                          // round(t/n) half-up, exact integer math
+const rm=s=>(s<0?'-':'')+'RM'+Math.floor(Math.abs(s)/100)+'.'+String(Math.abs(s)%100).padStart(2,'0');
+function calc(r){const per={},lines=[];let total=0;r.people.forEach(p=>per[p.id]=0);
+r.items.forEach(it=>{const t=itemTotal(it),who=it.who.filter(id=>id in per),sh={};total+=t;
+if(it.method==='ind'){if(who[0]!=null)sh[who[0]]=t}else if(who.length){const s=share(t,who.length);who.forEach(id=>sh[id]=s)}
+for(const id in sh)per[id]+=sh[id];lines.push({it,t,sh})});
+return{total,per,lines,sum:Object.values(per).reduce((a,b)=>a+b,0)}}
+//</calc>
+const $=s=>document.querySelector(s),esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-3);
+const DB={open(){return new Promise((a,b)=>{const q=indexedDB.open('splitmate',1);q.onupgradeneeded=()=>q.result.createObjectStore('kv');q.onsuccess=()=>a(q.result);q.onerror=()=>b(q.error)})},
+async get(){const d=await this.open();return new Promise(a=>{const q=d.transaction('kv').objectStore('kv').get('data');q.onsuccess=()=>a(q.result);q.onerror=()=>a()})},
+async set(v){const d=await this.open();return new Promise(a=>{const t=d.transaction('kv','readwrite');t.objectStore('kv').put(v,'data');t.oncomplete=a;t.onerror=a})}};
+let S={db:{members:[],receipts:[]},view:'home',rid:null,form:null,show:false};
+const save=()=>DB.set(S.db).catch(()=>{}),R=()=>S.db.receipts.find(r=>r.id===S.rid);
+function toast(m){const t=$('#toast');t.textContent=m;t.className='s';clearTimeout(toast.t);toast.t=setTimeout(()=>t.className='',2200)}
+const fmtD=ts=>new Date(ts).toLocaleString('en-MY',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+const qtyS=q=>String(+(q/1000)),priceS=p=>(p/100).toFixed(2);
+function blank(r,o){let who=o?o.who.filter(id=>r.people.some(p=>p.id===id)):r.people.map(p=>p.id),m=o?o.method:'equal';if(m==='ind')who=who.slice(0,1);return{id:null,name:'',price:'',qty:'1',method:m,who}}
+function home(){const d=S.db,rs=[...d.receipts].sort((a,b)=>b.ts-a.ts);
+return `<h1>SplitMate</h1><section class=card><h2 style="margin-top:0">Members (${d.members.length})</h2><div class=chips>${d.members.map(m=>`<span class=chip><b data-a=ren data-id=${m.id}>${esc(m.name)}</b><i data-a=delm data-id=${m.id}>✕</i></span>`).join('')}</div><div class=row><input id=nm placeholder="New member name"><button class=btn data-a=addm>Add</button></div><small>Tap a name to rename.</small></section>
+<button class="btn big" data-a=new>+ New receipt</button><h2>History</h2>${rs.length?rs.map(r=>`<div class="card hist" data-a=open data-id=${r.id}><div><b>${esc(r.name)}</b><br><small>${fmtD(r.ts)} · ${r.items.length} items</small></div><div class=amt>${rm(calc(r).total)}</div><button class="ic dg" data-a=delr data-id=${r.id} aria-label=Delete>🗑</button></div>`).join(''):'<p class=mu>No receipts yet. Tap “New receipt” to start.</p>'}
+<section class=card><h2 style="margin-top:0">Backup</h2><div class=row><button class=btn2 data-a=exp>Export</button><button class=btn2 data-a=imp>Import</button></div><input type=file id=file accept=".json,application/json" hidden></section>`}
+function editor(){const r=R(),f=S.form,c=calc(r),pp=r.people,P=id=>(pp.find(p=>p.id===id)||{name:'?'}).name;
+const all=[...pp,...S.db.members.filter(m=>!pp.some(p=>p.id===m.id))];
+return `<div class=top><button class=ic data-a=back aria-label=Back style="font-size:22px">←</button><b>${fmtD(r.ts)}</b></div>
+<section class=card><label>Receipt name</label><input data-f=rname value="${esc(r.name)}" placeholder="Econsave, Dinner…"><label>Who is on this receipt?</label><div class=chips>${all.map(m=>`<button class="chip ${pp.some(p=>p.id===m.id)?'on':''}" data-a=tp data-id=${m.id}>${esc(m.name)}</button>`).join('')}</div>
+<label>Paid by</label><select data-f=payer>${pp.map(p=>`<option value=${p.id} ${p.id===r.payer?'selected':''}>${esc(p.name)}</option>`).join('')}</select></section>
+<section class=card><h2 style="margin:0 0 6px">${f.id?'Edit item':'Add item'}</h2><input data-f=name id=iname placeholder="Item name" value="${esc(f.name)}" enterkeyhint=next>
+<div class=g2><div><label>Unit price (RM)</label><input data-f=price inputmode=decimal placeholder="0.00" value="${esc(f.price)}"></div><div><label>Quantity</label><input data-f=qty inputmode=decimal value="${esc(f.qty)}"></div></div>
+<label>Split method</label><div class=seg><button class="${f.method==='equal'?'on':''}" data-a=meth data-v=equal>Equal split</button><button class="${f.method==='ind'?'on':''}" data-a=meth data-v=ind>Individual</button></div>
+<label>${f.method==='equal'?'Shared by (pick any)':'Paid for by (pick one)'}</label><div class=chips>${pp.map(p=>`<button class="chip ${f.who.includes(p.id)?'on':''}" data-a=pw data-id=${p.id}>${esc(p.name)}</button>`).join('')}</div>
+<div class=row style="margin-top:8px"><button class="btn big" data-a=add style="flex:1">${f.id?'Save item':'Add item'}</button>${f.id?'<button class=btn2 data-a=cancel>Cancel</button>':''}</div></section>
+<section class=card><div class="row sp"><h2 style="margin:0">Items (${r.items.length})</h2><b class=amt>${rm(c.total)}</b></div>${r.items.length?c.lines.map(l=>{const it=l.it;return `<div class=it><div><b>${esc(it.name)}</b><br><small>${qtyS(it.qty)} × ${rm(it.price)} · </small><span class="tag ${it.method==='ind'?'i':''}">${it.method==='ind'?'Individual: '+esc(P(it.who[0])):'Equal ÷ '+it.who.filter(id=>pp.some(p=>p.id===id)).length}</span></div><div class=amt>${rm(l.t)}</div><button class=ic data-a=edit data-id=${it.id} aria-label=Edit>✎</button><button class="ic dg" data-a=deli data-id=${it.id} aria-label=Delete>✕</button></div>`}).join(''):'<p class=mu>No items yet. Add your first item above.</p>'}</section>
+<button class="btn big" data-a=calc>Calculate</button>${S.show?summary(r,c):''}`}
+function summary(r,c){const pay=r.payer;return `<section class=card id=sum><small>Total receipt amount</small><div class=tot>${rm(c.total)}</div><small>Paid by ${esc((r.people.find(p=>p.id===pay)||{}).name||'-')}</small><div style="margin-top:8px">${r.people.map(p=>`<div class=me><div><b>${esc(p.name)}</b><br><small>Total share ${rm(c.per[p.id])}</small></div><div class=amt>${p.id===pay?`<span class=pay>Own share ${rm(c.per[p.id])}</span>`:`Owes ${rm(c.per[p.id])}`}</div></div>`).join('')}</div>${c.sum!==c.total?`<small>Shares add up to ${rm(c.sum)}; the ${rm(Math.abs(c.total-c.sum))} difference is rounding (each item share is rounded to the sen).</small>`:''}
+<details><summary>Item-by-item breakdown</summary>${c.lines.map(l=>`<div class=it><div><b>${esc(l.it.name)}</b> <span class=mu>${rm(l.t)}</span><br><small>${r.people.filter(p=>p.id in l.sh).map(p=>esc(p.name)+' '+rm(l.sh[p.id])).join(' · ')}</small></div></div>`).join('')}</details></section>`}
+function render(){$('#app').innerHTML=S.view==='home'?home():editor()}
+function leave(){const r=R();if(r&&!r.items.length&&r.name==='Receipt')S.db.receipts=S.db.receipts.filter(x=>x!==r);S.view='home';S.rid=null;S.show=false;save();render()}
+const dirty=()=>{S.show=false;save()};
+const A={
+addm(){const i=$('#nm'),n=i.value.trim();if(!n)return toast('Enter a name');S.db.members.push({id:uid(),name:n});save();render()},
+ren(id){const m=S.db.members.find(x=>x.id===id),n=prompt('Rename member',m.name);if(n&&n.trim()){m.name=n.trim();save();render()}},
+delm(id){const m=S.db.members.find(x=>x.id===id);if(confirm(`Remove ${m.name}? Existing receipts keep their name.`)){S.db.members=S.db.members.filter(x=>x!==m);save();render()}},
+new(){const ms=S.db.members;if(ms.length<2)return toast('Add at least 2 members first');const r={id:uid(),name:'Receipt',ts:Date.now(),payer:ms[0].id,people:ms.map(m=>({id:m.id,name:m.name})),items:[]};S.db.receipts.push(r);S.rid=r.id;S.view='edit';S.form=blank(r);S.show=false;save();render()},
+open(id){S.rid=id;const r=R();S.view='edit';S.form=blank(r);S.show=false;render();scrollTo(0,0)},
+delr(id){const r=S.db.receipts.find(x=>x.id===id);if(confirm(`Delete "${r.name}"?`)){S.db.receipts=S.db.receipts.filter(x=>x!==r);save();render()}},
+back:leave,
+tp(id){const r=R(),i=r.people.findIndex(p=>p.id===id);if(i>=0){if(r.people.length<2)return toast('Keep at least 1 person');r.people.splice(i,1);r.items.forEach(t=>t.who=t.who.filter(x=>x!==id));S.form.who=S.form.who.filter(x=>x!==id);if(r.payer===id)r.payer=r.people[0].id}else{const m=S.db.members.find(x=>x.id===id);r.people.push({id,name:m.name})}dirty();render()},
+meth(v){const f=S.form;f.method=v;if(v==='ind')f.who=f.who.slice(0,1).length?f.who.slice(0,1):[R().people[0].id];else if(f.who.length<2)f.who=R().people.map(p=>p.id);render()},
+pw(id){const f=S.form;if(f.method==='ind')f.who=[id];else f.who=f.who.includes(id)?f.who.filter(x=>x!==id):[...f.who,id];render()},
+add(){const f=S.form,r=R(),p=toSen(f.price),q=toMilli(f.qty);
+if(!f.name.trim())return toast('Enter an item name');if(p==null)return toast('Enter a valid price');if(q==null||q<=0)return toast('Enter a valid quantity');if(!f.who.length)return toast('Pick who shares this item');
+const it={id:f.id||uid(),name:f.name.trim(),price:p,qty:q,method:f.method,who:[...f.who]};
+if(f.id)r.items=r.items.map(x=>x.id===f.id?it:x);else r.items.push(it);S.form=blank(r,f);dirty();render();if(!it.id||true)$('#iname').focus()},
+edit(id){const it=R().items.find(x=>x.id===id);S.form={id,name:it.name,price:priceS(it.price),qty:qtyS(it.qty),method:it.method,who:[...it.who]};render();scrollTo(0,0)},
+cancel(){S.form=blank(R(),S.form);render()},
+deli(id){const r=R(),it=r.items.find(x=>x.id===id);if(confirm(`Delete "${it.name}"?`)){r.items=r.items.filter(x=>x!==it);if(S.form.id===id)S.form=blank(r,S.form);dirty();render()}},
+calc(){const r=R();if(!r.items.length)return toast('Add at least one item');S.show=true;render();$('#sum').scrollIntoView({behavior:'smooth'})},
+exp(){const b=new Blob([JSON.stringify({app:'splitmate',v:1,exported:Date.now(),...S.db},null,1)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='splitmate-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),999)},
+imp(){$('#file').click()}};
+document.addEventListener('click',e=>{const t=e.target.closest('[data-a]');if(!t)return;const a=t.dataset.a;A[a]&&A[a](t.dataset.id||t.dataset.v)});
+document.addEventListener('input',e=>{const k=e.target.dataset.f;if(!k)return;const v=e.target.value;if(k==='rname'){R().name=v;save()}else if(k==='payer'){R().payer=v;dirty();render()}else S.form[k]=v});
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='nm')A.addm()});
+document.addEventListener('change',e=>{if(e.target.id!=='file')return;const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{const d=JSON.parse(rd.result);if(!Array.isArray(d.members)||!Array.isArray(d.receipts))throw 0;if(!confirm(`Replace current data with backup (${d.receipts.length} receipts, ${d.members.length} members)?`))return;S.db={members:d.members,receipts:d.receipts};save();render();toast('Backup restored')}catch(x){toast('Invalid backup file')}};rd.readAsText(f);e.target.value=''});
+(async()=>{let d;try{d=await DB.get()}catch(e){}
+S.db=d||{members:[1,2,3,4].map(i=>({id:uid(),name:'Roommate '+i})),receipts:[]};if(!d)save();render();
+if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{})})();
+</script></body></html>
